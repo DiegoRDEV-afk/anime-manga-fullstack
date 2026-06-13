@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const controller = require('./player.controller');
 
-router.get('/', (req, res) => {
-    res.json({ success: true, message: 'Player API funcionando' });
-});
+// GET /api/player/video?url=https://animeflv.net/ver/one-piece-tv-1
+router.get('/video', controller.getVideoUrl);
 
 module.exports = router;
