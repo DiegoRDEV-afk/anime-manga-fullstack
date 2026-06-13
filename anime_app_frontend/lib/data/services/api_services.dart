@@ -6,52 +6,78 @@ class ApiService {
   final Dio _dio = Dio();
   final String _baseUrl = 'http://localhost:3000/api';
 
-  Future<List<AnimeModel>> buscarAnime(String query) async {
+  // ─────────────────────────────────────────
+  // BÚSQUEDA
+  // ─────────────────────────────────────────
+  Future<List<AnimeModel>> buscarAnime(String query, {String? provider}) async {
     try {
-      final response = await _dio.get('$_baseUrl/buscar', queryParameters: {'q': query});
+      final response = await _dio.get(
+        '$_baseUrl/anime/search',
+        queryParameters: {'q': query, if (provider != null) 'provider': provider},
+      );
       if (response.statusCode == 200 && response.data['success'] == true) {
-        final List<dynamic> listaData = response.data['data'];
+        final List<dynamic> listaData = response.data['data']['results'];
         return listaData.map((e) => AnimeModel.fromJson(e)).toList();
-      } else {
-        throw Exception('Error en la respuesta del servidor');
       }
+      return [];
     } catch (e) {
       print('❌ Error en buscarAnime: $e');
       return [];
     }
   }
 
-  Future<List<AnimeModel>> getUltimos() async {
+  // ─────────────────────────────────────────
+  // HOME
+  // ─────────────────────────────────────────
+  Future<Map<String, dynamic>> getHome() async {
     try {
-      final response = await _dio.get('$_baseUrl/ultimos');
+      final response = await _dio.get('$_baseUrl/anime/home');
       if (response.statusCode == 200 && response.data['success'] == true) {
-        final List<dynamic> listaData = response.data['data'];
-        return listaData.map((e) => AnimeModel.fromJson(e)).toList();
+        return response.data['data'];
       }
-      return [];
+      return {};
     } catch (e) {
-      print('❌ Error en getUltimos: $e');
+      print('❌ Error en getHome: $e');
+      return {};
+    }
+  }
+
+  Future<List<AnimeModel>> getTop() async {
+    try {
+      final home = await getHome();
+      final List<dynamic> listaData = home['top5'] ?? [];
+      return listaData.map((e) => AnimeModel.fromJson(e)).toList();
+    } catch (e) {
+      print('❌ Error en getTop: $e');
       return [];
     }
   }
 
   Future<List<AnimeModel>> getPopulares() async {
     try {
-      final response = await _dio.get('$_baseUrl/populares');
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final List<dynamic> listaData = response.data['data'];
-        return listaData.map((e) => AnimeModel.fromJson(e)).toList();
-      }
-      return [];
+      final home = await getHome();
+      final List<dynamic> listaData = home['populares'] ?? [];
+      return listaData.map((e) => AnimeModel.fromJson(e)).toList();
     } catch (e) {
       print('❌ Error en getPopulares: $e');
       return [];
     }
   }
 
+  Future<List<AnimeModel>> getUltimos() async {
+    try {
+      final home = await getHome();
+      final List<dynamic> listaData = home['ultimosEpisodios'] ?? [];
+      return listaData.map((e) => AnimeModel.fromJson(e)).toList();
+    } catch (e) {
+      print('❌ Error en getUltimos: $e');
+      return [];
+    }
+  }
+
   Future<List<AnimeModel>> getNovedades() async {
     try {
-      final response = await _dio.get('$_baseUrl/novedades');
+      final response = await _dio.get('$_baseUrl/anime/novedades');
       if (response.statusCode == 200 && response.data['success'] == true) {
         final List<dynamic> listaData = response.data['data'];
         return listaData.map((e) => AnimeModel.fromJson(e)).toList();
@@ -63,20 +89,15 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> getVideoUrl(String urlEpisodio) async {
-    try {
-      final response = await _dio.get('$_baseUrl/video', queryParameters: {'url': urlEpisodio});
-      if (response.statusCode == 200) return response.data;
-      return {'success': false, 'error': 'Error del servidor'};
-    } catch (e) {
-      print('❌ Error en getVideoUrl: $e');
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-
+  // ─────────────────────────────────────────
+  // DETALLE DEL ANIME
+  // ─────────────────────────────────────────
   Future<Map<String, dynamic>> getAnimeInfo(String urlAnime) async {
     try {
-      final response = await _dio.get('$_baseUrl/anime', queryParameters: {'url': urlAnime});
+      final response = await _dio.get(
+        '$_baseUrl/anime/info',
+        queryParameters: {'url': urlAnime},
+      );
       if (response.statusCode == 200 && response.data['success'] == true) {
         return response.data['data'];
       }
@@ -86,24 +107,11 @@ class ApiService {
       return {};
     }
   }
-Future<List<AnimeModel>> getTop() async {
-    try {
-      final response = await _dio.get('$_baseUrl/populares/top');
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final List<dynamic> listaData = response.data['data'];
-        return listaData.map((e) => AnimeModel.fromJson(e)).toList();
-      }
-      return [];
-    } catch (e) {
-      print('❌ Error en getTop: $e');
-      return [];
-    }
-  }
 
-Future<AnimeDetailModel?> obtenerDetallesAnime(String urlAnime) async {
+  Future<AnimeDetailModel?> obtenerDetallesAnime(String urlAnime) async {
     try {
       final response = await _dio.get(
-        '$_baseUrl/anime',
+        '$_baseUrl/anime/info',
         queryParameters: {'url': urlAnime},
       );
       if (response.statusCode == 200 && response.data['success'] == true) {
@@ -116,4 +124,20 @@ Future<AnimeDetailModel?> obtenerDetallesAnime(String urlAnime) async {
     }
   }
 
-} 
+  // ─────────────────────────────────────────
+  // VIDEO
+  // ─────────────────────────────────────────
+  Future<Map<String, dynamic>> getVideoUrl(String urlEpisodio) async {
+    try {
+      final response = await _dio.get(
+        '$_baseUrl/player/video',
+        queryParameters: {'url': urlEpisodio},
+      );
+      if (response.statusCode == 200) return response.data;
+      return {'success': false, 'error': 'Error del servidor'};
+    } catch (e) {
+      print('❌ Error en getVideoUrl: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+}

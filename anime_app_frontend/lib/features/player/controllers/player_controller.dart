@@ -14,7 +14,7 @@ class PlayerController extends ChangeNotifier {
   PlayerController() {
       player = Player(
         configuration: const PlayerConfiguration(
-          bufferSize: 32 * 1024 * 1024, // 32MB de buffer
+          bufferSize:  64 * 1024 * 1024, // 64MB de buffer
         ),
       );
         videoController = VideoController(
@@ -35,7 +35,7 @@ class PlayerController extends ChangeNotifier {
     try {
       print('🎬 Llamando backend: $urlEpisodio');
       final response = await http.get(
-        Uri.parse('http://localhost:3000/api/video?url=${Uri.encodeComponent(urlEpisodio)}'),
+      Uri.parse('http://localhost:3000/api/player/video?url=${Uri.encodeComponent(urlEpisodio)}'),
       );
       print('✅ Backend respondió: ${response.statusCode}');
       print('📦 Body: ${response.body}');
@@ -61,7 +61,7 @@ class PlayerController extends ChangeNotifier {
       print('▶️ Esperando video...');
 
       await player.stream.buffer
-    .firstWhere((buffer) => buffer.inSeconds > 5)
+    .firstWhere((buffer) => buffer.inSeconds > 15)
     .timeout(const Duration(seconds: 30), onTimeout: () => Duration.zero);
 
       print('🟢 Video listo');
