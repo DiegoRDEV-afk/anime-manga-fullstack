@@ -1,192 +1,168 @@
-const { URL } = require("node:url");
+const { URL } = require('node:url');
+const { ApiError } = require('../../shared/utils/api-error');
 
-// 1. Importamos tus scrapers individuales
 const animeflvScraper = require('./scrapers/animeflv.scraper');
-const animev1Scraper = require('./scrapers/animev1.scraper');
-const hentailaScraper = require('./scrapers/hentaila.scraper');
 const jkanimeScraper = require('./scrapers/jkanime.scraper');
+const tioanimetScraper = require('./scrapers/tioanime.scraper');
 const monoschinoScraper = require('./scrapers/monoschino.scraper');
-const tioanimeScraper = require('./scrapers/tioanime.scraper');
+const hentailaScraper = require('./scrapers/hentaila.scraper');
 
-// 2. Mapeamos los proveedores con sus dominios y sus respectivos scrapers
 const PROVIDERS = [
-  {
-    id: "animeflv",
-    label: "AnimeFLV",
-    domains: ["animeflv.net", "www.animeflv.net", "www4.animeflv.net"],
-    scraper: animeflvScraper,
-  },
-  {
-    id: "animev1",
-    label: "AnimeAV1",
-    domains: ["animeav1.com", "www.animeav1.com"],
-    scraper: animev1Scraper,
-  },
-  {
-    id: "jkanime",
-    label: "JKAnime",
-    domains: ["jkanime.net", "www.jkanime.net"],
-    scraper: jkanimeScraper,
-  },
-  {
-    id: "hentaila",
-    label: "HentaiLA",
-    domains: ["hentaila.com", "www.hentaila.com"],
-    scraper: hentailaScraper,
-  },
-  {
-    id: "tioanime",
-    label: "TioAnime",
-    domains: ["tioanime.com", "www.tioanime.com"],
-    scraper: tioanimeScraper,
-  },
-  {
-    id: "monoschino",
-    label: "MonosChinos",
-    domains: ["monoschinos2.com", "www.monoschinos2.com"],
-    scraper: monoschinoScraper,
-  },
+    {
+        id: 'animeflv',
+        label: 'AnimeFLV',
+        domains: ['animeflv.net', 'www.animeflv.net', 'www4.animeflv.net'],
+        service: animeflvScraper,
+    },
+    {
+        id: 'jkanime',
+        label: 'JKAnime',
+        domains: ['jkanime.net', 'www.jkanime.net'],
+        service: jkanimeScraper,
+    },
+    {
+        id: 'tioanime',
+        label: 'TioAnime',
+        domains: ['tioanime.com', 'www.tioanime.com'],
+        service: tioanimetScraper,
+    },
+    {
+        id: 'monoschino',
+        label: 'MonosChino',
+        domains: ['monoschino2.com', 'www.monoschino2.com'],
+        service: monoschinoScraper,
+    },
+    {
+        id: 'hentaila',
+        label: 'HentaiLA',
+        domains: ['hentaila.com', 'www.hentaila.com'],
+        service: hentailaScraper,
+        adult: true,
+    },
 ];
 
-// ==========================================
-// FUNCIONES METODOLÓGICAS (Normalizar y buscar dominios)
-// ==========================================
+// ─────────────────────────────────────────
+// UTILIDADES
+// ─────────────────────────────────────────
 
 function normalizeDomain(value) {
-  if (!value || typeof value !== "string") return null;
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return null;
-
-  try {
-    if (trimmed.includes("://")) {
-      return new URL(trimmed).hostname.toLowerCase();
+    if (!value || typeof value !== 'string') return null;
+    const trimmed = value.trim().toLowerCase();
+    try {
+        if (trimmed.includes('://')) return new URL(trimmed).hostname.toLowerCase();
+        return new URL(`https://${trimmed}`).hostname.toLowerCase();
+    } catch {
+        return trimmed.split('/')[0];
     }
-    return new URL(`https://${trimmed}`).hostname.toLowerCase();
-  } catch (_error) {
-    return trimmed.split("/")[0];
-  }
-}
-
-function domainMatches(domain, candidate) {
-  if (!domain || !candidate) return false;
-  return domain === candidate || domain.endsWith(`.${candidate}`);
 }
 
 function findProviderByDomain(domainCandidate) {
-  const domain = normalizeDomain(domainCandidate);
-  if (!domain) return null;
-  return PROVIDERS.find((p) => p.domains.some((cand) => domainMatches(domain, cand))) || null;
+    const domain = normalizeDomain(domainCandidate);
+    if (!domain) return null;
+    return PROVIDERS.find(p => p.domains.some(d => domain === d || domain.endsWith(`.${d}`))) || null;
 }
 
 function findProviderById(providerId) {
-  if (!providerId || typeof providerId !== "string") return null;
-  const normalized = providerId.trim().toLowerCase();
-  return PROVIDERS.find((p) => p.id === normalized) || null;
+    if (!providerId || typeof providerId !== 'string') return null;
+    return PROVIDERS.find(p => p.id === providerId.trim().toLowerCase()) || null;
 }
 
 function findProviderForUrl(urlCandidate) {
-  if (!urlCandidate || typeof urlCandidate !== "string") return null;
-  try {
-    const host = new URL(urlCandidate).hostname;
-    return findProviderByDomain(host);
-  } catch (_error) {
-    return null;
-  }
-}
-
-// ==========================================
-// FUNCIONES CORE DEL SERVICIO
-// ==========================================
-
-/**
- * Busca animes en un proveedor específico o en todos en paralelo
- */
-async function searchAnime(query, providerOrDomain) {
-  // Buscamos si el usuario forzó un proveedor (ya sea por ID como 'animeflv' o por dominio)
-  const forcedProvider = findProviderByDomain(providerOrDomain) || findProviderById(providerOrDomain);
-
-  if (forcedProvider) {
-    const result = await forcedProvider.scraper.search(query);
-    return {
-      success: true,
-      source: forcedProvider.id,
-      providerLabel: forcedProvider.label,
-      data: { results: result, count: result.length }
-    };
-  }
-
-  // SI NO HAY PROVEEDOR FORZADO: Búsqueda unificada en paralelo en TODOS los proveedores
-  const searchPromises = PROVIDERS.map(async (provider) => {
+    if (!urlCandidate || typeof urlCandidate !== 'string') return null;
     try {
-      const results = await provider.scraper.search(query);
-      return {
-        success: true,
-        providerId: provider.id,
-        providerLabel: provider.label,
-        results: results || []
-      };
-    } catch (error) {
-      console.warn(`[SEARCH] Error en proveedor ${provider.id}:`, error.message);
-      return { success: false, providerId: provider.id, results: [] };
+        const host = new URL(urlCandidate).hostname;
+        return findProviderByDomain(host);
+    } catch { return null; }
+}
+
+// ─────────────────────────────────────────
+// HOME
+// ─────────────────────────────────────────
+
+async function getHome() {
+    return animeflvScraper.getHome();
+}
+
+async function getNovedades() {
+    return animeflvScraper.getNovedades();
+}
+
+// ─────────────────────────────────────────
+// BÚSQUEDA MULTI-PROVEEDOR
+// ─────────────────────────────────────────
+
+async function searchAnime(query, providerIdOrDomain) {
+    const forcedProvider = findProviderByDomain(providerIdOrDomain) || findProviderById(providerIdOrDomain);
+
+    if (forcedProvider) {
+        const result = await forcedProvider.service.searchAnime(query, forcedProvider.domains[0]);
+        return { ...result, source: result?.source || forcedProvider.id };
     }
-  });
 
-  const searchResults = await Promise.all(searchPromises);
-  const allResults = [];
+    // Búsqueda en paralelo en todos los proveedores (excepto adult)
+    const activeProviders = PROVIDERS.filter(p => !p.adult);
+    const searchPromises = activeProviders.map(async (provider) => {
+        try {
+            const result = await provider.service.searchAnime(query, provider.domains[0]);
+            const results = result?.data?.results || [];
+            results.forEach(item => { item.provider = provider.label; });
+            return { success: true, providerId: provider.id, results };
+        } catch (error) {
+            console.warn(`[SEARCH] Error en proveedor ${provider.id}:`, error.message);
+            return { success: false, providerId: provider.id };
+        }
+    });
 
-  for (const res of searchResults) {
-    if (res.success && res.results.length > 0) {
-      // Inyectamos qué proveedor trajo este anime para que Flutter lo sepa
-      res.results.forEach(item => item.provider = res.providerLabel);
-      allResults.push(...res.results);
-    }
-  }
+    const searchResults = await Promise.all(searchPromises);
+    const allResults = searchResults.filter(r => r.success && r.results.length > 0).flatMap(r => r.results);
 
-  if (allResults.length > 0) {
     return {
-      success: true,
-      source: "Multi",
-      data: { results: allResults, count: allResults.length }
+        success: true,
+        source: 'Multi',
+        data: { results: allResults, count: allResults.length },
     };
-  }
-
-  throw new Error("No se encontraron resultados en ningún proveedor o los servidores están caídos.");
 }
 
-/**
- * Obtiene la información detallada de un anime usando su URL
- */
+// ─────────────────────────────────────────
+// DETALLE DEL ANIME
+// ─────────────────────────────────────────
+
 async function getAnimeInfo(urlCandidate) {
-  const provider = findProviderForUrl(urlCandidate) || PROVIDERS[0];
-  if (!provider) throw new Error("Proveedor no soportado");
-
-  // Redirecciona al método getAnimeInfo del scraper correspondiente
-  const result = await provider.scraper.getAnimeInfo(urlCandidate);
-  return {
-    success: true,
-    source: provider.id,
-    data: result
-  };
+    const provider = findProviderForUrl(urlCandidate) || PROVIDERS[0];
+    if (!provider) throw new ApiError(400, 'Proveedor no soportado');
+    const result = await provider.service.getAnimeInfo(urlCandidate);
+    return { ...result, source: result?.source || provider.id };
 }
 
-/**
- * Obtiene los enlaces de reproducción de un episodio usando su URL
- */
-async function getEpisodeLinks(urlCandidate, includeMega, excludeServers) {
-  const provider = findProviderForUrl(urlCandidate) || PROVIDERS[0];
-  if (!provider) throw new Error("Proveedor no soportado");
+// ─────────────────────────────────────────
+// LINKS DEL EPISODIO
+// ─────────────────────────────────────────
 
-  // Redirecciona al método getEpisodeLinks del scraper correspondiente
-  const result = await provider.scraper.getEpisodeLinks(urlCandidate, includeMega, excludeServers);
-  return {
-    success: true,
-    source: provider.id,
-    data: result
-  };
+async function getEpisodeLinks(urlCandidate, includeMega, excludeServers) {
+    const provider = findProviderForUrl(urlCandidate) || PROVIDERS[0];
+    if (!provider) throw new ApiError(400, 'Proveedor no soportado');
+    const result = await provider.service.getEpisodeLinks(urlCandidate, includeMega, excludeServers);
+    return { ...result, source: result?.source || provider.id };
+}
+
+// ─────────────────────────────────────────
+// CATÁLOGO
+// ─────────────────────────────────────────
+
+async function getCatalog(page, genre, providerId) {
+    const provider = findProviderById(providerId) || PROVIDERS[0];
+    if (provider.service.getCatalog) {
+        return provider.service.getCatalog(page, genre);
+    }
+    throw new ApiError(400, 'Este proveedor no soporta catálogo');
 }
 
 module.exports = {
-  searchAnime,
-  getAnimeInfo,
-  getEpisodeLinks,
+    getHome,
+    getNovedades,
+    searchAnime,
+    getAnimeInfo,
+    getEpisodeLinks,
+    getCatalog,
+    PROVIDERS,
 };
