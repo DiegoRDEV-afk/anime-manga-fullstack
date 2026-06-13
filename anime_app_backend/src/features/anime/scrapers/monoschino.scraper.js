@@ -253,6 +253,31 @@ async function getEpisodeLinks(urlCandidate, includeMega = false, excludeServers
         } catch (err) { }
     });
 
+    // ─────────────────────────────────────────────────────────────────
+    // 🟢 ALGORITMO DE PRIORIZACIÓN 1080p (INYECTADO)
+    // ─────────────────────────────────────────────────────────────────
+    // Priorizamos los servidores premium incrustados que mantienen Full HD intacto
+    const topServers1080p = ['filemoon', 'streamwish', 'faststream', 'mixdrop', 'mega'];
+
+    if (streamLinks.SUB && streamLinks.SUB.length > 0) {
+        streamLinks.SUB.sort((a, b) => {
+            // Como en tu bucle guardas $(el).text().trim().toLowerCase() en 'server',
+            // el string ya viene normalizado en minúsculas.
+            const nameA = a.server || '';
+            const nameB = b.server || '';
+
+            const indexA = topServers1080p.findIndex(srv => nameA.includes(srv));
+            const indexB = topServers1080p.findIndex(srv => nameB.includes(srv));
+
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+
+            return 0;
+        });
+    }
+    // ─────────────────────────────────────────────────────────────────
+
     const episodeTitle = $("h1").first().text().trim() || `Episodio ${episodeNumber}`;
 
     return {
@@ -283,6 +308,7 @@ async function getEpisodeLinks(urlCandidate, includeMega = false, excludeServers
         source: "monoschinos",
     };
 }
+
 
 module.exports = {
     searchAnime,

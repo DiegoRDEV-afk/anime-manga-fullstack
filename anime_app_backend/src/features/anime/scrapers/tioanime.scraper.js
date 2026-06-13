@@ -296,6 +296,39 @@ async function getEpisodeLinks(urlCandidate) {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // 🟢 ALGORITMO DE PRIORIZACIÓN 1080p (INYECTADO)
+    // ─────────────────────────────────────────────────────────────────
+    // Definimos los servidores que mantienen resoluciones altas y buen bitrate
+    const topServers1080p = ['streamwish', 'filemoon', 'faststream', 'mega', 'mixdrop'];
+
+    const sortServersByQuality = (a, b) => {
+        // Obtenemos el nombre del servidor (ej: 'StreamWish') y lo pasamos a minúsculas
+        const nameA = (a.server || '').toLowerCase();
+        const nameB = (b.server || '').toLowerCase();
+
+        // Buscamos si los servidores existen en nuestro olimpo de Full HD
+        const indexA = topServers1080p.findIndex(srv => nameA.includes(srv));
+        const indexB = topServers1080p.findIndex(srv => nameB.includes(srv));
+
+        // Si ambos servidores son de alta calidad, se ordenan según nuestra preferencia
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+
+        // Si solo A es 1080p, se va al principio de la lista
+        if (indexA !== -1) return -1;
+
+        // Si solo B es 1080p, se va al principio de la lista
+        if (indexB !== -1) return 1;
+
+        // Si ninguno es 1080p, conservan su orden relativo original
+        return 0;
+    };
+
+    // Ordenamos ambas listas por si el episodio tiene versión subtitulada y doblada
+    if (streamLinks.SUB.length > 0) streamLinks.SUB.sort(sortServersByQuality);
+    if (streamLinks.DUB.length > 0) streamLinks.DUB.sort(sortServersByQuality);
+    // ─────────────────────────────────────────────────────────────────
+
     const episodeTitle =
         cheerio.load(html)("h1.title, h1").first().text().trim() || `Episodio ${episodeNumber}`;
 
@@ -316,8 +349,8 @@ async function getEpisodeLinks(urlCandidate) {
                 dub: streamLinks.DUB.map((l) => ({ server: l.server, url: l.url })),
             },
             streamLinks: {
-                SUB: streamLinks.SUB.map((l) => ({ server: l.server, url: l.url })),
-                DUB: streamLinks.DUB.map((l) => ({ server: l.server, url: l.url })),
+                sub: streamLinks.SUB.map((l) => ({ server: l.server, url: l.url })),
+                dub: streamLinks.DUB.map((l) => ({ server: l.server, url: l.url })),
             },
             downloadLinks: {
                 SUB: [],
@@ -327,6 +360,7 @@ async function getEpisodeLinks(urlCandidate) {
         source: "tioanime",
     };
 }
+
 
 module.exports = {
     searchAnime,

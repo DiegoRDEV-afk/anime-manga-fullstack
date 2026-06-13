@@ -687,10 +687,36 @@ async function getEpisodeLinks(urlCandidate, includeMegaRaw, excludeServersRaw) 
         }
     }
 
-    const filteredStreamSub = filterLinksByServers(streamLinks.SUB, excludedTokens);
-    const filteredStreamDub = filterLinksByServers(streamLinks.DUB, excludedTokens);
+    let filteredStreamSub = filterLinksByServers(streamLinks.SUB, excludedTokens);
+    let filteredStreamDub = filterLinksByServers(streamLinks.DUB, excludedTokens);
     const filteredDownloadSub = filterLinksByServers(downloadLinks.SUB, excludedTokens);
     const filteredDownloadDub = filterLinksByServers(downloadLinks.DUB, excludedTokens);
+
+    // ─────────────────────────────────────────────────────────────────
+    // 🟢 ALGORITMO DE PRIORIZACIÓN 1080p (INYECTADO)
+    // ─────────────────────────────────────────────────────────────────
+    // Agregamos 'desu' en la punta, que es el servidor Full HD propio de JKAnime
+    const topServers1080p = ['desu', 'streamwish', 'filemoon', 'faststream', 'mega', 'mixdrop'];
+
+    const sortServersByQuality = (a, b) => {
+        // En tu estructura, buildLinkRecord guarda el nombre del servidor en .server
+        const nameA = (a.server || '').toLowerCase();
+        const nameB = (b.server || '').toLowerCase();
+
+        const indexA = topServers1080p.findIndex(srv => nameA.includes(srv));
+        const indexB = topServers1080p.findIndex(srv => nameB.includes(srv));
+
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+
+        return 0;
+    };
+
+    // Ordenamos las listas filtradas de reproducción antes de enviarlas
+    if (filteredStreamSub.length > 0) filteredStreamSub.sort(sortServersByQuality);
+    if (filteredStreamDub.length > 0) filteredStreamDub.sort(sortServersByQuality);
+    // ─────────────────────────────────────────────────────────────────
 
     return {
         success: true,
@@ -720,7 +746,6 @@ async function getEpisodeLinks(urlCandidate, includeMegaRaw, excludeServersRaw) 
         source: "jkanime",
     };
 }
-
 module.exports = {
     searchAnime,
     getAnimeInfo,

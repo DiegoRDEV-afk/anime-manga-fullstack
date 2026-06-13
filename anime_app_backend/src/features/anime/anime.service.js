@@ -1,4 +1,5 @@
 const { URL } = require('node:url');
+const axios = require('axios'); // 🟢 Requerido para verificar los enlaces en vivo
 const { ApiError } = require('../../shared/utils/api-error');
 
 const animeflvScraper = require('./scrapers/animeflv.scraper');
@@ -75,6 +76,29 @@ function findProviderForUrl(urlCandidate) {
     } catch { return null; }
 }
 
+// 🟢 VERIFICADOR DE ENLACES EN TIEMPO REAL
+async function isLinkAlive(url) {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) return false;
+    
+    const headers = { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
+    };
+
+    try {
+        // Intento veloz con HEAD (no descarga peso, solo lee headers)
+        const response = await axios.head(url, { timeout: 2000, headers });
+        return response.status >= 200 && response.status < 400;
+    } catch (error) {
+        try {
+            // Intento de respaldo con GET corto por si el servidor rechaza peticiones HEAD
+            const response = await axios.get(url, { timeout: 2000, headers, maxContentLength: 500 });
+            return response.status >= 200 && response.status < 400;
+        } catch (innerError) {
+            return false;
+        }
+    }
+}
+
 // ─────────────────────────────────────────
 // HOME
 // ─────────────────────────────────────────
@@ -99,7 +123,6 @@ async function searchAnime(query, providerIdOrDomain) {
         return { ...result, source: result?.source || forcedProvider.id };
     }
 
-    // Búsqueda en paralelo en todos los proveedores (excepto adult)
     const activeProviders = PROVIDERS.filter(p => !p.adult);
     const searchPromises = activeProviders.map(async (provider) => {
         try {
@@ -135,14 +158,87 @@ async function getAnimeInfo(urlCandidate) {
 }
 
 // ─────────────────────────────────────────
-// LINKS DEL EPISODIO
+// LINKS DEL EPISODIO (Optimizados y Verificados)
 // ─────────────────────────────────────────
 
 async function getEpisodeLinks(urlCandidate, includeMega, excludeServers) {
-    const provider = findProviderForUrl(urlCandidate) || PROVIDERS[0];
+    let provider = findProviderForUrl(urlCandidate) || PROVIDERS[0];
     if (!provider) throw new ApiError(400, 'Proveedor no soportado');
-    const result = await provider.service.getEpisodeLinks(urlCandidate, includeMega, excludeServers);
-    return { ...result, source: result?.source || provider.id };
+
+    let result = null;
+
+    // 🚀 INTERCEPTOR INTELIGENTE: Si viene de AnimeFLV, saltamos al espejo Full HD de TioAnime
+    if (provider.id === 'animeflv') {
+        try {
+            const urlParts = urlCandidate.split('/');
+            const episodeSlug = urlParts[urlParts.length - 1];
+            const tioAnimeMirrorUrl = `https://tioanime.com/ver/${episodeSlug}`;
+            const targetProvider = findProviderById('tioanime');
+
+            if (targetProvider) {
+                console.log(`✨ [1080p Engine] Intentando espejo en TioAnime: ${tioAnimeMirrorUrl}`);
+                const mirrorResult = await targetProvider.service.getEpisodeLinks(tioAnimeMirrorUrl, includeMega, excludeServers);
+                
+                if (mirrorResult && mirrorResult.data && mirrorResult.data.servers && mirrorResult.data.servers.sub.length > 0) {
+                    result = { ...mirrorResult, source: 'tioanime' };
+                    console.log('🟢 [1080p Engine] Servidores Full HD obtenidos exitosamente.');
+                }
+            }
+        } catch (mirrorError) {
+            console.warn('⚠️ [1080p Engine] El espejo falló. Recurriendo a la fuente original.');
+        }
+    }
+
+    // Si no se originó en AnimeFLV o el espejo falló, extraemos de la fuente por defecto
+    if (!result) {
+        const rawResult = await provider.service.getEpisodeLinks(urlCandidate, includeMega, excludeServers);
+        result = { ...rawResult, source: rawResult?.source || provider.id };
+    }
+
+    // 🛡️ MOTOR DE SUPERVIVENCIA: Filtrar enlaces caídos en la punta del array para Flutter
+    if (result && result.data && result.data.servers && result.data.servers.sub.length > 0) {
+        console.log(`🔍 [Link Checker] Purgando enlaces rotos de la respuesta...`);
+        
+        let validServers = [];
+        // Validamos únicamente el top 4 de los mejores servidores para no retrasar la API
+        const topServersToTest = result.data.servers.sub.slice(0, 4);
+
+        for (const srv of topServersToTest) {
+            const lowerServer = srv.server.toLowerCase();
+            // Le damos pase directo a reproductores locales incrustados complejos que no admiten ping directo
+            if (lowerServer.includes('player') || lowerServer.includes('embed') || srv.url.includes('iframe')) {
+                validServers.push(srv);
+                continue;
+            }
+
+            const alive = await isLinkAlive(srv.url);
+            if (alive) {
+                validServers.push(srv);
+                // Si el servidor número 1 (el mejor en 1080p) está vivo, rompemos el bucle para responder al instante
+                if (validServers.length === 1) break;
+            } else {
+                console.warn(`❌ [Link Checker] Servidor caído removido: [${srv.server}]`);
+            }
+        }
+
+        // Reconstrucción final del catálogo de servidores
+        if (validServers.length === 0) {
+            // Si por alguna razón extrema todo falló, dejamos la lista original intacta como último recurso
+            validServers = result.data.servers.sub;
+        } else {
+            // Adjuntamos el resto de los servidores intermedios que no probamos
+            const nonTestedServers = result.data.servers.sub.slice(topServersToTest.length);
+            validServers = [...validServers, ...nonTestedServers];
+        }
+
+        // Sincronizamos las propiedades de respuesta para Flutter
+        result.data.servers.sub = validServers;
+        if (result.data.streamLinks && result.data.streamLinks.SUB) {
+            result.data.streamLinks.SUB = validServers;
+        }
+    }
+
+    return result;
 }
 
 // ─────────────────────────────────────────
