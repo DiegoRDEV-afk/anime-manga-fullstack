@@ -1,81 +1,70 @@
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class PlayerController extends ChangeNotifier {
-  late final Player player;
-  late final VideoController videoController;
+    bool loading = true;
+    String? error;
+    
+    // Guardamos las variables que necesita el WebView
+    String? videoUrl;
+    String? referer;
+    
+    // 🟢 ESTA VARIABLE ES LA QUE LE FALTA A TU COMPILADOR
+    String? scriptAntiAnuncios;
 
-  bool loading = true;
-  String? error;
+    PlayerController();
 
-  PlayerController() {
-      player = Player(
-        configuration: const PlayerConfiguration(
-          bufferSize:  64 * 1024 * 1024, // 64MB de buffer
-        ),
-      );
-        videoController = VideoController(
-          player,
-          configuration: const VideoControllerConfiguration(
-            enableHardwareAcceleration: false,
-            width: 1280,
-            height: 720,
-          ),
-        );
+    Future<void> loadVideo(String urlEpisodio) async {
+        loading = true;
+        error = null;
+        videoUrl = null;
+        referer = null;
+        scriptAntiAnuncios = null; 
+        if (hasListeners) notifyListeners();
+
+        try {
+            print('🎬 Llamando backend: $urlEpisodio');
+            
+            final response = await http.get(
+                Uri.parse('http://localhost:3000/api/anime/video?url=${Uri.encodeComponent(urlEpisodio)}'),
+            );
+            
+            print('✅ Backend respondió: ${response.statusCode}');
+
+            if (response.statusCode != 200) throw Exception('Error del servidor');
+
+            final responseData = jsonDecode(response.body);
+            if (responseData['success'] != true) throw Exception('El backend no devolvió éxito');
+
+            // Capturamos el escudo anti-anuncios del backend
+            scriptAntiAnuncios = responseData['scriptBlinder'];
+
+            final dataField = responseData['data'];
+            if (dataField != null && dataField['servers'] != null) {
+                final List<dynamic> servidoresSub = dataField['servers']['sub'] ?? [];
+                
+                if (servidoresSub.isNotEmpty) {
+                    final primerServidor = servidoresSub[0];
+                    videoUrl = primerServidor['url'];
+                    referer = responseData['referer'] ?? '${Uri.parse(videoUrl!).scheme}://${Uri.parse(videoUrl!).host}/';
+                    print('🔗 URL del video obtenida con éxito: $videoUrl');
+                } else {
+                    throw Exception('La lista de servidores "sub" viene vacía');
+                }
+            } else {
+                throw Exception('No se encontró el nodo "data" o "servers"');
+            }
+
+            loading = false;
+        } catch (e) {
+            print('❌ Error en PlayerController: $e');
+            loading = false;
+            error = e.toString();
+        } finally {
+            if (hasListeners) notifyListeners();
+        }
     }
 
-  Future<void> loadVideo(String urlEpisodio) async {
-    loading = true;
-    error = null;
-    if (hasListeners) notifyListeners();
-
-    try {
-      print('🎬 Llamando backend: $urlEpisodio');
-      final response = await http.get(
-      Uri.parse('http://localhost:3000/api/player/video?url=${Uri.encodeComponent(urlEpisodio)}'),
-      );
-      print('✅ Backend respondió: ${response.statusCode}');
-      print('📦 Body: ${response.body}');
-
-      if (response.statusCode != 200) throw Exception('Error del servidor');
-
-      final data = jsonDecode(response.body);
-      if (data['success'] != true) throw Exception('El backend no devolvió éxito');
-
-      final String videoUrl = data['url'];
-      final String referer = data['referer'] ?? 'https://streamwish.to/';
-
-      if (!hasListeners) return;
-
-    await player.open(Media(
-      videoUrl,
-      httpHeaders: {
-        'Referer': referer,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-    ));
-
-      print('▶️ Esperando video...');
-
-      await player.stream.buffer
-    .firstWhere((buffer) => buffer.inSeconds > 15)
-    .timeout(const Duration(seconds: 30), onTimeout: () => Duration.zero);
-
-      print('🟢 Video listo');
-      loading = false;
-    } catch (e) {
-      print('❌ Error: $e');
-      loading = false;
-      error = e.toString();
-    } finally {
-      if (hasListeners) notifyListeners();
-    }
-  }
-
-  void disposePlayer() {
-    player.dispose();
-  }
+    void disposePlayer() {}
 }

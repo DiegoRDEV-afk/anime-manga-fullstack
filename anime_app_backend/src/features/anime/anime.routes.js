@@ -15,7 +15,8 @@ router.get('/search', controller.searchAnime);
 router.get('/info', controller.getAnimeInfo);
 
 // GET /api/anime/episode?url=https://animeflv.net/ver/one-piece-tv-1
-router.get('/episode', controller.getEpisodeLinks);
+/*router.get('/episode', controller.getEpisodeLinks);*/
+router.get('/video', controller.getEpisodeLinks);
 
 // GET /api/anime/catalog?page=1&genre=accion&provider=animeflv
 router.get('/catalog', controller.getCatalog);

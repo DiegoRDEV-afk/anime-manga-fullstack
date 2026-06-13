@@ -122,14 +122,14 @@ async function extraerDesdeJKAnime(animeflvUrl) {
 
         console.log(`🎌 JKAnime servidores: ${decodedServers.map(s => s.server).join(', ')}`);
 
-        // Intentar Mediafire primero (más rápido)
+        // Intentar Mediafire primero (descarga directa sin throttling)
         const mediafire = decodedServers.find(s => s.server === 'Mediafire');
         if (mediafire?.url) {
             const resultado = await extraerMediafire(mediafire.url);
             if (resultado) return resultado;
         }
 
-        // Intentar Mp4upload
+        // Intentar Mp4upload segundo
         const mp4upload = decodedServers.find(s => s.server === 'Mp4upload');
         if (mp4upload?.url) {
             const resultado = await extraerMp4Upload(mp4upload.url);
