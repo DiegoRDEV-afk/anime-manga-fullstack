@@ -124,6 +124,35 @@ class ApiService {
     }
   }
 
+Future<List<AnimeDetailEpisodeModel>> obtenerEpisodiosTemporada(
+  String urlAnime,
+) async {
+  try {
+    final response = await _dio.get(
+      '$_baseUrl/anime/episodes',
+      queryParameters: {'url': urlAnime},
+    );
+
+    if (response.statusCode != 200 || response.data['success'] != true) {
+      print('⚠️ obtenerEpisodiosTemporada: respuesta inválida');
+      return [];
+    }
+
+    final List episodios = response.data['data'] ?? [];
+
+    print('📺 Episodios recibidos del backend: ${episodios.length}');
+
+    return episodios
+        .map<AnimeDetailEpisodeModel>(
+          (e) => AnimeDetailEpisodeModel.fromJson(e as Map<String, dynamic>),
+        )
+        .toList();
+  } catch (e) {
+    print('❌ Error en obtenerEpisodiosTemporada: $e');
+    return [];
+  }
+}
+
   // ─────────────────────────────────────────
   // VIDEO
   // ─────────────────────────────────────────

@@ -40,11 +40,13 @@ class ExploreController extends ChangeNotifier {
   void setEstado(String? value) {
     _estado = value;
     notifyListeners();
+    buscar();
   }
 
   void setTipo(String? value) {
     _tipo = value;
     notifyListeners();
+    buscar();
   }
 
   void toggleGenero(String genero) {
@@ -54,6 +56,7 @@ class ExploreController extends ChangeNotifier {
       _generos.add(genero);
     }
     notifyListeners();
+    buscar();
   }
 
   void limpiarFiltros() {
@@ -66,29 +69,48 @@ class ExploreController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> buscar() async {
-    if (_query.isEmpty && _estado == null && _tipo == null && _generos.isEmpty) {
-      _mensajeError = 'Ingresa al menos un filtro de búsqueda.';
-      notifyListeners();
-      return;
-    }
-
+Future<void> buscar() async {
     _estaCargando = true;
     _mensajeError = '';
     notifyListeners();
 
     try {
-      _resultados = await _apiService.buscarAnime(_query);
-
-      // Filtrar localmente por estado, tipo y géneros
-      if (_estado != null) {
-        _resultados = _resultados.where((a) =>
-            a.tipo.toLowerCase().contains(_estado!.toLowerCase())).toList();
+      if (_query.isNotEmpty) {
+        // Búsqueda por nombre
+        _resultados = await _apiService.buscarAnime(_query);
+      } else {
+        // Búsqueda por filtros usando catálogo con género
+        _resultados = await _apiService.getCatalogo(
+          genero: _generos.isNotEmpty ? _generos.first.toLowerCase() : null,
+        );
       }
-      if (_tipo != null) {
+
+      // Filtrar por tipo localmente
+      if (_tipo != null && _tipo!.isNotEmpty) {
         _resultados = _resultados.where((a) =>
             a.tipo.toLowerCase().contains(_tipo!.toLowerCase())).toList();
       }
+
+      // Filtrar por estado localmente
+      if (_estado != null && _estado!.isNotEmpty) {
+        final estadoMap = {
+          'En emisión': 'en emision',
+          'Finalizado': 'finalizado',
+          'Próximamente': 'proximo',
+        };
+        final estadoBuscar = estadoMap[_estado!] ?? _estado!.toLowerCase();
+        _resultados = _resultados.where((a) =>
+            a.tipo.toLowerCase().contains(estadoBuscar)).toList();
+      }
+
+      // Filtrar resultados sin título o vacíos
+      _resultados = _resultados
+          .where((a) =>
+              a.titulo.isNotEmpty &&
+              a.titulo != 'Sin título' &&
+              a.urlAnime != null &&
+              a.urlAnime!.isNotEmpty)
+          .toList();
 
       if (_resultados.isEmpty) {
         _mensajeError = 'No se encontraron resultados.';
@@ -109,6 +131,14 @@ class ExploreController extends ChangeNotifier {
 
     try {
       _resultados = await _apiService.getCatalogo();
+      // Filtrar resultados sin título o vacíos
+      _resultados = _resultados
+      .where((a) => 
+          a.titulo.isNotEmpty && 
+          a.titulo != 'Sin título' &&
+          a.urlAnime != null &&
+          a.urlAnime!.isNotEmpty)
+      .toList();
       if (_resultados.isEmpty) {
         _mensajeError = 'No hay contenido disponible.';
       }

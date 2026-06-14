@@ -303,6 +303,71 @@ async function getAnimeInfo(urlCandidate) {
         urlVer: ep.url,
     }));
 
+    // 🚀 MOTOR DE TEMPORADAS DINÁMICO
+    let seasons = [];
+    try {
+        // Limpiamos el slug actual para usarlo como base de búsqueda (quitamos números y sufijos de temporada)
+        // Ej: si el slug es "wistoria-wand-and-sword-2nd-season" o "wistoria-2", nos quedamos con "wistoria"
+        const cleanQuery = slug
+            .replace(/(-\d+nd|-\d+st|-\d+rd|-season|-\d+)/gi, '')
+            .replace(/-/g, ' ')
+            .trim();
+
+        if (cleanQuery.length > 2) {
+            console.log(`🔍 [Seasons Engine] Buscando temporadas para la base: "${cleanQuery}"`);
+            
+            // Reutilizamos el método searchAnime propio del scraper pasándole el dominio actual
+            const searchResponse = await searchAnime(cleanQuery, domain);
+            const searchResults = searchResponse?.data?.results || [];
+
+            // DEBUG: ver qué resultados devuelve AnimeFLV
+            console.log(
+                searchResults.map(item => ({
+                    titulo: item.titulo,
+                    urlAnime: item.urlAnime
+                }))
+            );
+
+            // Filtrar resultados válidos
+            seasons = searchResults
+                .filter(item =>
+                    item?.titulo?.trim() &&
+                    item?.urlAnime?.trim()
+                )
+                .map(item => ({
+                    title: item.titulo,
+                    url: item.urlAnime,
+                    episodesCount: item.episodesCount || 0
+                }));
+        }
+    } catch (seasonError) {
+        console.warn('⚠️ [Seasons Engine] Error al agrupar temporadas:', seasonError.message);
+    }
+
+    // Si el buscador no arrojó nada o falló, nos aseguramos de mandar al menos el anime actual como única opción
+    if (seasons.length === 0) {
+        seasons.push({
+            title: info.title,
+            url: normalizedUrl,
+            episodesCount: episodes.length
+        });
+    } else {
+        // Ordenamos alfabéticamente/cronológicamente las temporadas para que salgan en orden (Temp 1, Temp 2...)
+        seasons.sort((a, b) => {
+            const getSeasonNumber = (title) => {
+                const match = title.match(/season\s*(\d+)/i);
+
+                if (match) {
+                    return parseInt(match[1]);
+                }
+
+                return 1;
+            };
+
+            return getSeasonNumber(a.title) - getSeasonNumber(b.title);
+        });
+    }
+
     return {
         success: true,
         data: {
@@ -316,6 +381,7 @@ async function getAnimeInfo(urlCandidate) {
             calificacion: 0.0,
             generos: info.genres,
             totalEpisodios: episodes.length,
+            seasons: seasons, // 🟢 Enviamos el nuevo array de temporadas agrupadas
             episodios: episodiosConMiniatura,
         },
         source: 'animeflv',
@@ -431,4 +497,10 @@ async function getNovedades() {
     return { success: true, total: animes.length, data: animes.slice(0, 15) };
 }
 
-module.exports = { searchAnime, getAnimeInfo, getEpisodeLinks, getCatalog, getHome, getNovedades };
+async function getEpisodesOnly(url) {
+    const animeInfo = await getAnimeInfo(url);
+    // getAnimeInfo retorna { success, data: { episodios: [...] }, source }
+    return animeInfo?.data?.episodios || [];
+}
+
+module.exports = { searchAnime, getAnimeInfo, getEpisodeLinks, getCatalog, getHome, getNovedades, getEpisodesOnly};

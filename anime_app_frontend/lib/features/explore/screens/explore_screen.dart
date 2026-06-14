@@ -95,7 +95,20 @@ class _PanelFiltros extends StatelessWidget {
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
-            onChanged: controller.setQuery,
+            onChanged: (value) {
+              controller.setQuery(value);
+              if (value.isEmpty) {
+                // Si borra todo, regresa al catálogo
+                controller.cargarCatalogo();
+              } else {
+                // Busca automáticamente después de 150ms
+                Future.delayed(const Duration(milliseconds: 150), () {
+                  if (controller.query == value && value.isNotEmpty) {
+                    controller.buscar();
+                  }
+                });
+              }
+            },
           ),
 
           const SizedBox(height: 16),

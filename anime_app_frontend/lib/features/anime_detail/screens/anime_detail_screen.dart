@@ -45,10 +45,13 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
           }
 
           final anime = _controller.animeDetalle!;
+          final animeDetalle = _controller.animeDetalle;
+          final seasons = animeDetalle?.seasons ?? [];
 
           return Stack(
             children: [
-              // IMAGEN DE FONDO DIFUMINADA
+
+              // ── IMAGEN DE FONDO DIFUMINADA ──────────────────────────
               Container(
                 height: 450,
                 decoration: BoxDecoration(
@@ -63,6 +66,7 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                 ),
               ),
 
+              // ── GRADIENTE SUPERIOR→FONDO ────────────────────────────
               Positioned.fill(
                 child: Container(
                   decoration: const BoxDecoration(
@@ -76,7 +80,7 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                 ),
               ),
 
-
+              // ── CONTENIDO PRINCIPAL ─────────────────────────────────
               SingleChildScrollView(
                 padding: const EdgeInsets.only(top: 160, left: 24, right: 24, bottom: 40),
                 child: Column(
@@ -111,12 +115,18 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                                   icon: const Icon(Icons.play_arrow, color: Colors.white, size: 27),
                                   label: const Text(
                                     "Continuar Viendo",
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF7C3AED),
                                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -143,7 +153,6 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 200),
-                              // Estrellas + calificación
                               Row(
                                 children: [
                                   ...List.generate(5, (index) {
@@ -170,7 +179,6 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              // Título
                               Text(
                                 anime.titulo.toUpperCase(),
                                 style: const TextStyle(
@@ -180,7 +188,6 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              // Sinopsis
                               Text(
                                 anime.sinopsis,
                                 maxLines: 4,
@@ -202,7 +209,6 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 240),
-
                             const SizedBox(height: 40),
                             _InfoItem(label: 'Géneros', value: anime.generos.join(', ')),
                             const SizedBox(height: 10),
@@ -220,84 +226,173 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                     Container(height: 1, color: Colors.white12),
                     const SizedBox(height: 20),
 
-                    // ── SELECTOR TEMPORADA ──────────────────────────────
+                    // ── SELECTOR DE TEMPORADA ───────────────────────────
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
-                        "Temporada 1",
-                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: seasons.any((s) => s.url == _controller.urlTemporadaActual)
+                              ? _controller.urlTemporadaActual
+                              : seasons.isNotEmpty
+                                  ? seasons.first.url
+                                  : null,
+                          dropdownColor: const Color(0xFF1E1E1E),
+                          icon: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Colors.white70,
+                            size: 18,
+                          ),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          items: seasons.map<DropdownMenuItem<String>>((season) {
+                            return DropdownMenuItem<String>(
+                              value: season.url,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 200),
+                                child: Text(
+                                  "${season.title} (${season.episodesCount} CAPS)",
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (String? newSeasonUrl) async {
+                            if (newSeasonUrl == null) return;
+                            await _controller.cambiarTemporada(newSeasonUrl);
+                          },
+                        ),
                       ),
                     ),
 
                     const SizedBox(height: 16),
 
-                    // ── CARRUSEL DE EPISODIOS ───────────────────────────
-                    SizedBox(
-                      height: 150,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
+                    // ── GRID DE EPISODIOS ESTILO CRUNCHYROLL ────────────
+                    if (_controller.cargandoEpisodios)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32),
+                          child: CircularProgressIndicator(color: Color(0xFF7C3AED)),
+                        ),
+                      )
+                    else
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 6,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 20,
+                          // 16:9 miniatura + espacio para texto abajo
+                          childAspectRatio: 16 / 13,
+                        ),
                         itemCount: anime.episodios.length,
                         itemBuilder: (context, index) {
                           final ep = anime.episodios[index];
-                          return Container(
-                            width: 180,
-                            margin: const EdgeInsets.only(right: 14),
+                          final tituloEp = ep.tituloEpisodio.isNotEmpty
+                              ? ep.tituloEpisodio
+                              : 'Episodio ${ep.numero}';
+
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => PlayerScreen(
+                                    urlEpisodio: ep.urlVer,
+                                    tituloAnime: anime.titulo,
+                                    tituloEpisodio: tituloEp,
+                                  ),
+                                ),
+                              );
+                            },
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Stack(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(6),
-                                      child: Image.network(
-                                        ep.miniatura,
-                                        width: 180,
-                                        height: 100,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) => Container(
-                                          color: Colors.white10,
-                                          height: 100,
-                                          child: const Icon(Icons.movie, color: Colors.white24),
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned.fill(
-                                      child: Container(
-                                        color: Colors.black.withOpacity(0.2),
-                                        child: Center(
-                                          child: IconButton(
-                                            icon: const Icon(Icons.play_circle_fill, color: Colors.white, size: 36),
-                                            onPressed: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) => PlayerScreen(
-                                                    urlEpisodio: ep.urlVer,
-                                                    tituloAnime: anime.titulo,
-                                                    tituloEpisodio: ep.tituloEpisodio,
-                                                  ),
-                                                )
-                                              );
-                                            },
+
+                                // ── MINIATURA 16:9 ──────────────────────
+                                AspectRatio(
+                                  aspectRatio: 16 / 9,
+                                  child: Stack(
+                                    children: [
+                                      // Imagen
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Image.network(
+                                          ep.miniatura,
+                                          width: double.infinity,
+                                          height: double.infinity,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.white10,
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: const Icon(
+                                              Icons.movie,
+                                              color: Colors.white24,
+                                              size: 28,
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      // Overlay sutil + ícono play
+                                      Positioned.fill(
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(6),
+                                            color: Colors.black.withOpacity(0.15),
+                                          ),
+                                          child: const Center(
+                                            child: Icon(
+                                              Icons.play_circle_outline,
+                                              color: Colors.white,
+                                              size: 32,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+
                                 const SizedBox(height: 6),
+
+                                // ── NOMBRE DEL ANIME (gris pequeño) ────
                                 Text(
-                                  ep.tituloEpisodio,
+                                  anime.titulo.toUpperCase(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 2),
+
+                                // ── TÍTULO DEL EPISODIO (blanco bold) ──
+                                Text(
+                                  'E${ep.numero} – $tituloEp',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.3,
                                   ),
                                 ),
                               ],
@@ -305,23 +400,21 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                           );
                         },
                       ),
-                    ),
                   ],
                 ),
               ),
-              
-              // BOTÓN ATRÁS
+
+              // ── BOTÓN ATRÁS ─────────────────────────────────────────
               Positioned(
                 top: 40,
                 left: 16,
-                child: SafeArea( // 🟢 Esto evita que el notch de la pantalla tape el botón
+                child: SafeArea(
                   child: Material(
-                    color: Colors.black.withOpacity(0.3), // Un fondo semi-transparente ayuda a verlo mejor
+                    color: Colors.black.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(50),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(50),
                       onTap: () {
-                        // El Navigator aquí es totalmente válido
                         if (Navigator.of(context).canPop()) {
                           Navigator.of(context).pop();
                         } else {
@@ -339,6 +432,7 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen> {
                   ),
                 ),
               ),
+
             ],
           );
         },

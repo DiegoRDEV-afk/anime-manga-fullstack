@@ -21,4 +21,7 @@ router.get('/video', controller.getEpisodeLinks);
 // GET /api/anime/catalog?page=1&genre=accion&provider=animeflv
 router.get('/catalog', controller.getCatalog);
 
+// GET /api/anime/episodes?url=
+router.get('/episodes', controller.getSeasonEpisodes);
+
 module.exports = router;

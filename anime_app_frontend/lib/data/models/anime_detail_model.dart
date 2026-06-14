@@ -8,7 +8,8 @@ class AnimeDetailModel {
   final String estado;
   final String tipo;
   final int totalEpisodios;
-  final List<EpisodioModel> episodios;
+  final List<AnimeDetailEpisodeModel> episodios;
+  final List<SeasonModel> seasons;
 
   AnimeDetailModel({
     required this.titulo,
@@ -21,6 +22,7 @@ class AnimeDetailModel {
     required this.tipo,
     required this.totalEpisodios,
     required this.episodios,
+    required this.seasons,
   });
 
 factory AnimeDetailModel.fromJson(Map<String, dynamic> json) {
@@ -37,33 +39,74 @@ factory AnimeDetailModel.fromJson(Map<String, dynamic> json) {
           .map<String>((g) => g is String ? g : (g['name'] ?? '').toString())
           .toList(),
       episodios: (json['episodios'] ?? json['episodes'] ?? [])
-          .map<EpisodioModel>((e) => EpisodioModel.fromJson(e))
+          .map<AnimeDetailEpisodeModel>((e) => AnimeDetailEpisodeModel.fromJson(e))
+          .toList(),
+      seasons: (json['seasons'] ?? [])
+          .map<SeasonModel>((s) => SeasonModel.fromJson(s))
           .toList(),
     );
   }
 
+  AnimeDetailModel copyWith({
+    List<AnimeDetailEpisodeModel>? episodios,
+  }) {
+    return AnimeDetailModel(
+      titulo: titulo,
+      sinopsis: sinopsis,
+      imagenPortada: imagenPortada,
+      imagenFondo: imagenFondo,
+      calificacion: calificacion,
+      generos: generos,
+      estado: estado,
+      tipo: tipo,
+      totalEpisodios: totalEpisodios,
+      episodios: episodios ?? this.episodios,
+      seasons: seasons,
+    );
+  }
   String? get imagen => imagenPortada.isNotEmpty ? imagenPortada : null;
 }
 
-class EpisodioModel {
+class AnimeDetailEpisodeModel {
   final int numero;
   final String tituloEpisodio;
   final String miniatura;
   final String urlVer;
 
-  EpisodioModel({
+  AnimeDetailEpisodeModel({
     required this.numero,
     required this.tituloEpisodio,
     required this.miniatura,
     required this.urlVer,
   });
 
-factory EpisodioModel.fromJson(Map<String, dynamic> json) {
-    return EpisodioModel(
+
+factory AnimeDetailEpisodeModel.fromJson(Map<String, dynamic> json) {
+    return AnimeDetailEpisodeModel(
       numero: json['numero'] ?? json['number'] ?? 0,
       tituloEpisodio: json['tituloEpisodio'] ?? json['title'] ?? '',
       miniatura: json['miniatura'] ?? json['thumbnail'] ?? '',
       urlVer: json['urlVer'] ?? json['url'] ?? '',
+    );
+  }
+}
+
+class SeasonModel {
+  final String title;
+  final String url;
+  final int episodesCount;
+
+  SeasonModel({
+    required this.title,
+    required this.url,
+    required this.episodesCount,
+  });
+
+  factory SeasonModel.fromJson(Map<String, dynamic> json) {
+    return SeasonModel(
+      title: json['title'] ?? '',
+      url: json['url'] ?? '',
+      episodesCount: json['episodesCount'] ?? 0,
     );
   }
 }

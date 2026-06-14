@@ -137,6 +137,23 @@ async function getCatalog(req, res, next) {
     }
 }
 
+const getSeasonEpisodes = async (req, res, next) => {
+    try {
+        const { url } = req.query;
+
+        const episodes =
+            await animeService.getSeasonEpisodes(url);
+
+        res.json({
+            success: true,
+            data: episodes
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     getHome,
     getNovedades,
@@ -144,4 +161,5 @@ module.exports = {
     getAnimeInfo,
     getEpisodeLinks,
     getCatalog,
+    getSeasonEpisodes,
 };
