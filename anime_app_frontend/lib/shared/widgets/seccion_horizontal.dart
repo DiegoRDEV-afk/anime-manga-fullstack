@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../data/models/anime_model.dart';
+import '../../data/models/anime_model.dart';
 import 'anime_card.dart';
 
 class SeccionHorizontal extends StatefulWidget {

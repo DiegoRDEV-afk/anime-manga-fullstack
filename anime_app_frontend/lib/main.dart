@@ -1,18 +1,19 @@
 import '/features/home/screens/home_screen.dart';
 import 'features/home/controllers/home_controller.dart';
+import 'features/explore/controllers/explore_controller.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+import 'features/main/main_screen.dart';
 
 void main() {
-  // Asegura que los bindings nativos (como el WebView) estén listos antes de arrancar
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   runApp(
-
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => HomeController()), // Proveedor para el HomeController
+        ChangeNotifierProvider(create: (_) => HomeController()),
+        ChangeNotifierProvider(create: (_) => ExploreController()),
       ],
       child: const MyApp(),
     ),
@@ -27,8 +28,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Anime App',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(), // Usamos tema oscuro por defecto
-      home: const HomePage(), // Cargamos el reproductor directo al iniciar
+      theme: ThemeData.dark(),
+      home: const MainScreen(),
     );
   }
 }

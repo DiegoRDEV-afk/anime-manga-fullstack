@@ -140,4 +140,25 @@ class ApiService {
       return {'success': false, 'error': e.toString()};
     }
   }
+
+  Future<List<AnimeModel>> getCatalogo({int page = 1, String? genero}) async {
+    try {
+      final response = await _dio.get(
+        '$_baseUrl/anime/catalog',
+        queryParameters: {
+          'page': page,
+          if (genero != null) 'genre': genero,
+          'provider': 'animeflv',
+        },
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final List<dynamic> listaData = response.data['data']['results'];
+        return listaData.map((e) => AnimeModel.fromJson(e)).toList();
+      }
+      return [];
+    } catch (e) {
+      print('❌ Error en getCatalogo: $e');
+      return [];
+    }
+  }
 }
